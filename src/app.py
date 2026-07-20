@@ -7,9 +7,10 @@ for extracurricular activities at Mergington High School.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 import os
 from pathlib import Path
+from urllib.parse import unquote
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -85,7 +86,7 @@ def root():
 
 @app.get("/activities")
 def get_activities():
-    return activities
+    return JSONResponse(content=activities, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/activities/{activity_name}/signup")
@@ -105,3 +106,23 @@ def signup_for_activity(activity_name: str, email: str):
     # Add student
     activity["participants"].append(email)
     return {"message": f"Signed up {email} for {activity_name}"}
+
+
+@app.delete("/activities/{activity_name}/participants")
+@app.delete("/activities/{activity_name}/participants/{email}")
+def unregister_participant(activity_name: str, email: str | None = None):
+    """Remove a participant from an activity."""
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    decoded_email = unquote(email)
+    activity = activities[activity_name]
+
+    if decoded_email not in activity["participants"]:
+        raise HTTPException(status_code=404, detail="Participant not found")
+
+    activity["participants"].remove(decoded_email)
+    return {"message": f"Removed {decoded_email} from {activity_name}"}
